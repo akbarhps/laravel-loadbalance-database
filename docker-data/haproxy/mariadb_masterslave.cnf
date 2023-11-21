@@ -1,0 +1,41 @@
+global
+    log 127.0.0.1 local0 notice
+    user root
+    group root
+
+defaults
+    #mode                    http
+    log                     global
+    option                  tcplog
+    retries                 2
+    timeout connect         4s
+    timeout client          30m #1440m
+    timeout server          30m #1440m
+    timeout check           10s
+    #maxconn                 3000
+
+listen write-cluster
+    bind    *:3306
+    mode    tcp
+    option  mysql-check user haproxy_user
+    server  db_write1 db_master:3306 check inter 2000 fall 3 rise 10
+
+listen read-cluster
+    mode 	tcp
+    option	tcpka
+    bind    *:3307
+    option	mysql-check	user haproxy_user
+    balance	roundrobin
+    #server  db_read1 db_master:3306 check inter 2000 fall 3 rise 10
+    server	db_read1 laravel-loadbalance-database-db_slave-1:3306 check inter 2000 fall 3 rise 10
+    server	db_read2 laravel-loadbalance-database-db_slave-2:3306 check inter 2000 fall 3 rise 10
+    server	db_read3 laravel-loadbalance-database-db_slave-3:3306 check inter 2000 fall 3 rise 10
+
+
+listen stats
+    bind	*:8080
+    mode	http
+    stats	enable
+    stats	uri /stats
+    stats	realm	Strictly\ Private
+    stats	auth	admin:admin

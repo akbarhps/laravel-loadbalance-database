@@ -1,0 +1,78 @@
+version: '3.7'
+services:
+  db_master:
+    image: bitnami/mariadb:latest
+    container_name: "db_master"
+    ports:
+      - target: 3306
+        published: 33001
+    volumes:
+      - ./docker-data/sql/master/init:/docker-entrypoint-initdb.d
+      - ./docker-data/sql/master/persistent:/bitnami/mariadb
+    environment:
+      BIND_ADDRESS: 0.0.0.0
+      MARIADB_ENABLE_SLOW_QUERY: 1
+      MARIADB_USER: dev
+      MARIADB_PASSWORD: devpass
+      MARIADB_DATABASE: laravel-docker
+      MARIADB_ROOT_PASSWORD: devpass
+      MARIADB_REPLICATION_MODE: master
+      MARIADB_REPLICATION_USER: dev
+      MARIADB_REPLICATION_PASSWORD: devpass
+    networks:
+      - db_network
+
+  db_slave:
+    image: bitnami/mariadb:latest
+    networks:
+      - db_network
+    depends_on:
+      - db_master
+    ports:
+      - "3306"
+    environment:
+      BIND_ADDRESS: 0.0.0.0
+      MARIADB_REPLICATION_MODE: slave
+      MARIADB_REPLICATION_USER: dev
+      MARIADB_REPLICATION_PASSWORD: devpass
+      MARIADB_MASTER_HOST: db_master
+      MARIADB_MASTER_ROOT_PASSWORD: devpass
+    
+  # web_app:
+  #   build:
+  #     args:
+  #       user: dev
+  #       uid: 1000
+  #     context: ./app
+  #     dockerfile: Dockerfile
+  #   image: laravel-loadbalance-database
+  #   container_name: web_app
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./app:/var/www/html
+  #   networks:
+  #     - db_network
+
+  haproxy:
+    image: haproxy:latest
+    networks:
+      - db_network
+    depends_on:
+      - db_master
+      - db_slave
+    ports:
+      # write database / master
+      - target: 3306
+        published: 33006
+      # read database / slave 
+      - target: 3307
+        published: 33007
+      - target: 8080
+        published: 8080
+    volumes:
+      - ./docker-data/haproxy/mariadb_masterslave.cnf:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+networks:
+  db_network:
+    name: "db_network"
+    driver: bridge
